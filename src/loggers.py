@@ -1,5 +1,5 @@
 """this is a workaround, see issue: https://github.com/PyTorchLightning/pytorch-lightning/issues/1228"""
-from pytorch_lightning.loggers import TensorBoardLogger
+from pytorch_lightning.loggers import TensorBoardLogger, LightningLoggerBase
 from pytorch_lightning.loggers.base import rank_zero_only
 from torch.utils.tensorboard.summary import hparams
 
