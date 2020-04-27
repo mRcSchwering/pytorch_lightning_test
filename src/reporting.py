@@ -39,24 +39,17 @@ class TrainingProgress(pl.Callback):
                 row[name] = metric(module.train_targets, module.train_predictions)
         module.logger.log_metrics(row, module.current_epoch)
     
-    #def on_train_end(self, trainer, module):
-    #    """Gets called when whole training round (all epochs) is over"""
-    #    # TODO: torch.tensorboard doesnt want to show the metric?! just empty...
-    #    module.logger.log_hyperparams_metrics(module.hparams, {'hparams/val_loss': self.best_val_loss})
 
-    #def _log_best_val_loss(self, module):
-    #    module.logger.log_metrics({'best_loss/val': self.best_val_loss}, module.current_epoch)
+class BestLoss(pl.Callback):
 
-    #def _log_loss(self, module) -> float:
-    #    """[train/val]_losses must be collected in module.metrics"""
-    #    train = torch.stack([d for d in module.metrics['train_losses']]).mean()
-    #    val = torch.stack([d for d in module.metrics['val_losses']]).mean()
-    #    module.logger.log_metrics({'loss/train': train, 'loss/val': val}, module.current_epoch)
-    #    return val
+    def __init__(self):
+        super(BestLoss, self).__init__()
+        self.best_loss = float('inf')
 
-    #def _log_acc(self, module) -> float:
-    #    """[train/val]_preds must be collected in module.metrics"""
-    #    train = torch.stack([d for d in module.metrics['train_preds']]).mean()
-    #    val = torch.stack([d for d in module.metrics['val_preds']]).mean()
-    #    module.logger.log_metrics({'acc/train': train, 'acc/val': val}, module.current_epoch)
-    #    return val
+    def on_epoch_end(self, trainer, module):
+        """Gets called by trainer after epoch end"""
+        current_loss = float(module.val_loss.cpu().numpy())
+        if current_loss < self.best_loss:
+            self.best_loss = current_loss
+            metrics = {'hparam/loss': self.best_loss}
+            module.logger.log_hyperparams_metrics(params=module.hparams, metrics=metrics)
