@@ -1,41 +1,47 @@
-"""this is a workaround, see issue: https://github.com/PyTorchLightning/pytorch-lightning/issues/1228"""
-from typing import Union, Optional, Dict, Any
-from argparse import Namespace
+"""
+I don't really want to invent my own logger, 
+but for now I can't log hyperparameters with metrics without a workaround.
+See issue: https://github.com/PyTorchLightning/pytorch-lightning/issues/1228.
+"""
+from typing import Dict
 from pytorch_lightning.loggers import TensorBoardLogger
 from pytorch_lightning.loggers.base import rank_zero_only
+from torch.utils.tensorboard import SummaryWriter
 from torch.utils.tensorboard.summary import hparams
 
 
-class MyTensorBoardLogger(TensorBoardLogger):
+class HyperparamsMetricsTensorBoardLogger(TensorBoardLogger):
     """
-    I am trying to log hyperparameters with metrics.
-    For some reason the metrics dont end up in tensorboard.
-    I had the suspicion that there is an issue with logging multiple times.
-    That's why I have this class.
+    By default hyperparameters would be logged without any metric at the beginning of the training.
+    That's why I silence the "normal" `log_hyperparams` call by pytorch lightning.
+    Next, to actually log hyperparameters I am using my own adaption of the original `log_hyperparams`.
+    This will make sure the tensorboard event files will end up in the same subdirectory.
+    This is importtant because every call will write a new file and tensorboard will interpret these
+    files as one metric as long as they have the same hyperparameter set and live in the same subdir.
+    (At least thats what I found out by trial+error).
 
-    Still not working though...
+    Good: log hyperparams with metrics however you want
+    Bad: have many event files (but tensorboard still interprets them correctly)
     """
 
-    def __init__(self, *args, **kwargs):
-        super(MyTensorBoardLogger, self).__init__(*args, **kwargs)
-
-    def log_hyperparams(self, *args, **kwargs):
+    def log_hyperparams(self, params: Dict[str, any], metrics: Dict[str, any] = None):
         pass
 
     @rank_zero_only
-    def log_hyperparams_metrics(self, params: Union[Dict[str, Any], Namespace],
-                        metrics: Optional[Dict[str, Any]] = None) -> None:
+    def log_hyperparams_metrics(self, params: Dict[str, any], metrics: Dict[str, any] = None):
         params = self._convert_params(params)
         params = self._flatten_dict(params)
         sanitized_params = self._sanitize_params(params)
-            
-        if metrics is None:
-            metrics = {}
-        exp, ssi, sei = hparams(sanitized_params, metrics)
-        writer = self.experiment._get_file_writer()
-        writer.add_summary(exp)
-        writer.add_summary(ssi)
-        writer.add_summary(sei)
-
-        # some alternative should be added
+        #self.experiment.add_hparams(sanitized_params, {} if metrics is None else metrics)
+        self._add_hparams(sanitized_params, {} if metrics is None else metrics)
         self.tags.update(sanitized_params)
+
+    def _add_hparams(self, hparam_dict: dict, metric_dict: dict):
+        exp, ssi, sei = hparams(hparam_dict, metric_dict)
+        with SummaryWriter(log_dir=self.log_dir) as w_hp:
+            w_hp.file_writer.add_summary(exp)
+            w_hp.file_writer.add_summary(ssi)
+            w_hp.file_writer.add_summary(sei)
+            for k, v in metric_dict.items():
+                w_hp.add_scalar(k, v)
+

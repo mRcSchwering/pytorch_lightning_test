@@ -1,6 +1,14 @@
 """Datasets, Dataloaders, and utils for dataloading"""
+from enum import Enum
 import torch
 from torch.utils.data import Dataset
+
+
+class Partition(Enum):
+    """Names of dataset partitions"""
+    TRAIN = 'train'
+    VAL = 'val'
+    TEST = 'test'
 
 
 class RandomClassData(Dataset):

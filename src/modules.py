@@ -1,16 +1,9 @@
 """Base PytorchLightningModules for extending"""
 from __future__ import annotations
-from enum import Enum
 from typing import List, Dict
 import torch
 import pytorch_lightning as pl
-
-
-class Partition(Enum):
-    """Since I'm always using those"""
-    TRAIN = 'train'
-    VAL = 'val'
-    TEST = 'test'
+from src.dataloading import Partition
 
 
 class CollectOnEpochEnd(pl.LightningModule):
