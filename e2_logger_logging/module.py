@@ -12,6 +12,8 @@ class MyModule(MetricsOnEpochEnd):
     """
     Using a module that collects all train/val targets and predictions
     and also calculates the metrics on train/val epoch end.
+    Doesnt pollute the module so much, but I have to pass metrics to the module.
+    Originally, I wanted the module to be free of metrics reporting.
     """
 
     def __init__(self, hparams: dict, metrics: dict):

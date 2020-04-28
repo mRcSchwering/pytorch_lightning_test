@@ -6,7 +6,7 @@ I tried to log the best validation loss to hparams in tensorboard, but it's stil
 
 :Example:
 
-   python e1_callback_logging/trainer.py
+   python e3_epoch_summary/trainer.py
 """
 import random
 from pathlib import Path
@@ -14,8 +14,9 @@ import pytorch_lightning as pl
 from pytorch_lightning import Trainer
 from pytorch_lightning.loggers import TensorBoardLogger
 from src.metrics import BinRocAuc
-from src.reporting import TrainingProgress, BestLoss
-from e1_callback_logging.module import MyModule
+from src.reporting import TrainingProgressFromSummary
+from src.modules import Partition
+from e3_epoch_summary.module import MyModule
 
 THIS_DIR = Path(__file__).parent.absolute()
 
@@ -24,15 +25,16 @@ def main(hparams: dict, run_i: int):
     print(f'starting {hparams}')
     
     module = MyModule(hparams)
+    metrics = {'auc': BinRocAuc()}
+    partitions = (Partition.TRAIN, Partition.VAL)  # TODO: add TEST
     logger = TensorBoardLogger(str(THIS_DIR / 'logs'), name=str(run_i))
-    training_progress = TrainingProgress({'auc': BinRocAuc()})
-    training_summary = BestLoss()
+    training_progress = TrainingProgressFromSummary(metrics, partitions)
     
     trainer = Trainer(
         logger=logger,
         max_epochs=hparams['max-epochs'],
         early_stop_callback=pl.callbacks.EarlyStopping(patience=50),
-        callbacks=[training_progress, training_summary])
+        callbacks=[training_progress])
     trainer.fit(module)
 
 

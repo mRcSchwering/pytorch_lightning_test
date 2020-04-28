@@ -2,17 +2,16 @@
 from torch.utils.data import DataLoader
 import torch.nn.functional as F
 import torch.optim as optim
-from src.modules import CollectOnEpochEnd
+from src.modules import SummarizeEpochs
 from src.dataloading import RandomClassData
 from src.modeling import TanhMlp
 from src.config import WORKERS
 
 
-class MyModule(CollectOnEpochEnd):
+class MyModule(SummarizeEpochs):
     """
-    Using a module that collects all train/val targets and predictions
-    for the callback that needs to calculate metrics.
-    Pollutes the module a little...
+    Collecting results after every epochs in a container class,
+    which is then used by callbacks for metric calculation.
     """
 
     def __init__(self, hparams: dict):
@@ -37,11 +36,11 @@ class MyModule(CollectOnEpochEnd):
 
     def training_step(self, batch, batch_idx: int) -> dict:
         loss, preds = self._forward_pass(*batch)
-        return {'loss': loss, 'preds': preds, 'targets': batch[1]}
+        return {'loss': loss, 'predictions': preds, 'targets': batch[1]}
 
     def validation_step(self, batch, batch_idx: int) -> dict:
         loss, preds = self._forward_pass(*batch)
-        return {'loss': loss, 'preds': preds, 'targets': batch[1]}
+        return {'loss': loss, 'predictions': preds, 'targets': batch[1]}
 
     def _forward_pass(self, x, y) -> float:
         preds = self.forward(x)
