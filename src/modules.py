@@ -128,6 +128,7 @@ class SummarizeEpochs(pl.LightningModule):
     
     In order for this to work the training and validation steps of the final module
     need to return `loss`, `predictions`, and `targets`.
+    If no test step was run `test_epoch_end` is not called.
     
     :Example:
 
@@ -135,7 +136,6 @@ class SummarizeEpochs(pl.LightningModule):
             loss, preds = self._forward_pass(*batch)
             return {'loss': loss, 'predictions': preds, 'targets': batch[1]}
     """
-    # TODO: test_epoch_end ?
 
     def __init__(self):
         super(SummarizeEpochs, self).__init__()
@@ -148,3 +148,7 @@ class SummarizeEpochs(pl.LightningModule):
     def training_epoch_end(self, train_steps: List[dict]) -> dict:
         loss = self.epoch_summary.set_results(Partition.TRAIN, train_steps)
         return {f'{Partition.TRAIN.value}_loss': loss}
+
+    def test_epoch_end(self, test_steps: List[dict]) -> dict:
+        loss = self.epoch_summary.set_results(Partition.TEST, test_steps)
+        return {f'{Partition.TEST.value}_loss': loss}

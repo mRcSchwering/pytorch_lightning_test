@@ -62,14 +62,12 @@ class TrainingProgressFromSummary(pl.Callback):
     A EpochSummary class has collected the epoch results.
     """
 
-    def __init__(self, metrics: Dict[str, Metric], partitions: Tuple[Partition]):
+    def __init__(self, metrics: Dict[str, Metric]):
         """
         :param metrics: map metric name to Metric class (name will be appended with partition)
-        :param partitions: which partitions were collected?
         """
         super(TrainingProgressFromSummary, self).__init__()
         self.metrics = {}
-        self.partitions = partitions  # TODO: just always use all partitions?
         self._init_metrics(metrics)
 
     def on_epoch_end(self, trainer: pl.Trainer, module: SummarizeEpochs):
@@ -82,7 +80,7 @@ class TrainingProgressFromSummary(pl.Callback):
 
     def _log_metrics(self, module: SummarizeEpochs):
         log = {}
-        for part in self.partitions:
+        for part in module.epoch_summary.summaries.keys():
             results = module.epoch_summary.get_results(part)
             log[f'loss/{part.value}'] = results.loss
             for name, metric in self.metrics.items():

@@ -15,7 +15,6 @@ from pytorch_lightning import Trainer
 from pytorch_lightning.loggers import TensorBoardLogger
 from src.metrics import BinRocAuc
 from src.reporting import TrainingProgressFromSummary
-from src.modules import Partition
 from e3_epoch_summary.module import MyModule
 
 THIS_DIR = Path(__file__).parent.absolute()
@@ -26,9 +25,8 @@ def main(hparams: dict, run_i: int):
     
     module = MyModule(hparams)
     metrics = {'auc': BinRocAuc()}
-    partitions = (Partition.TRAIN, Partition.VAL)  # TODO: add TEST
     logger = TensorBoardLogger(str(THIS_DIR / 'logs'), name=str(run_i))
-    training_progress = TrainingProgressFromSummary(metrics, partitions)
+    training_progress = TrainingProgressFromSummary(metrics)
     
     trainer = Trainer(
         logger=logger,
