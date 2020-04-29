@@ -11,3 +11,4 @@ Things to consider:
 5. Have multiple training stages (_e.g._ warmup rounds).
 6. Possibility to analyze gradients.
 7. Run in distributed environment.
+8. Evaluate dataloading on every step.
