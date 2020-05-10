@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import List, Dict
 import torch
 import pytorch_lightning as pl
+from ray import tune
 from src.dataloading import Partition
 
 
@@ -217,3 +218,74 @@ class SummarizeEpochs(pl.LightningModule):
     def test_epoch_end(self, test_steps: List[dict]) -> dict:
         loss = self.epoch_summary.set_results(Partition.TEST, test_steps)
         return {f'{Partition.TEST.value}_loss': loss}
+
+
+class Tune(pl.LightningModule):
+    """
+    This is similar to MetricsOnEpochEnd above.
+    I'm giving the metrics map to the module directly
+    and use the validation/training_epoch_end hooks to calculate and log metrics.
+
+    In addition, I can log a metric to my hyperparameters.
+    For that I write a summary with a `best/val-loss` metric at the beginning of the training.
+    This metric is then updated by normal `add_scalar` logs from the `log` key.
+    For this to work, I need to use a logger which doesn't log hparams without a metric
+    at the beginning of the training.
+    I implemented this in the `HyperparamsSummaryTensorBoardLogger` logger.
+    Idea from https://github.com/PyTorchLightning/pytorch-lightning/issues/1228#issuecomment-620558981
+
+    Again the training and validation steps of the final module
+    need to return `loss`, `preds`, and `targets`.
+    
+    :Example:
+
+        def training_step(self, batch, batch_idx: int) -> dict:
+            loss, preds = self._forward_pass(*batch)
+            return {'loss': loss, 'preds': preds, 'targets': batch[1]}
+    """
+
+    def __init__(self):
+        super(Tune, self).__init__()
+        self.best_val_loss = 999.9
+        self.logs = {}
+
+    def training_epoch_end(self, steps: List[dict]) -> dict:
+        targets = torch.cat([d['targets'] for d in steps], dim=0)
+        predictions = torch.cat([d['preds'] for d in steps], dim=0)
+        loss = float((torch.stack([d['loss'] for d in steps]).sum() / len(targets)).cpu().numpy())
+
+        partition = 'train'
+        self.logs[f'{partition}_loss'] = loss
+        return {f'{partition}_loss': loss}
+
+    def validation_epoch_end(self, steps: List[dict]) -> dict:
+        targets = torch.cat([d['targets'] for d in steps], dim=0)
+        predictions = torch.cat([d['preds'] for d in steps], dim=0)
+        loss = float((torch.stack([d['loss'] for d in steps]).sum() / len(targets)).cpu().numpy())
+
+        partition = 'val'
+        self.logs[f'{partition}_loss'] = loss
+        self.logs['best_val_loss'] = self._update_best_loss(loss)
+        self.logs['epoch'] = self.current_epoch
+        tune.track.log(**self.logs)
+        return {f'{partition}_loss': loss}
+
+    def _get_epoch_results(self, steps: List[dict], partition: str) -> dict:
+        # TODO: currently not using this method
+        # TODO: not implemented metrics
+        #targets = torch.cat([d['targets'] for d in steps], dim=0)
+        #predictions = torch.cat([d['preds'] for d in steps], dim=0)
+        #loss = float((torch.stack([d['loss'] for d in steps]).sum() / len(targets)).cpu().numpy())
+        #
+        #log = {f'loss/{partition}': loss}
+        #if partition == 'val':
+        #    log['best/val-loss'] = self._update_best_loss(loss)
+        #for name, metric in self.metrics.items():
+        #    log[f'{name}/{partition}'] = metric(targets, predictions)
+        #tune.track.log(**log)
+        pass
+
+    def _update_best_loss(self, loss: float):
+        if loss < self.best_val_loss:
+            self.best_val_loss = loss
+        return self.best_val_loss
