@@ -23,7 +23,7 @@ def main(hparams: dict, run_i: int):
     
     metrics = {'auc': BinRocAuc()}
     module = MyModule(hparams, metrics=metrics)
-    logger = HyperparamsSummaryTensorBoardLogger(str(THIS_DIR / 'logs'), name=str(run_i))
+    logger = HyperparamsSummaryTensorBoardLogger(str(THIS_DIR / '__logs__'), name=str(run_i))
     
     trainer = Trainer(
         logger=logger,

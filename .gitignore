@@ -1,4 +1,7 @@
+# ignore
 *__pycache__*
 *__cache__*
 *.pyc
-*/logs/*
+*/__logs__/*
+.vscode*
+.pytest*

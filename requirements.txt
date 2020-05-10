@@ -1,0 +1,2 @@
+pytorch-lightning==0.7.5
+scikit-learn==0.22.2.post1

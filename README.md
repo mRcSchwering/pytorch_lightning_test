@@ -12,3 +12,12 @@ Things to consider:
 6. Possibility to analyze gradients.
 7. Run in distributed environment.
 8. Evaluate dataloading on every step.
+
+
+```
+# run trainer
+python e5_using_logkey/trainer.py
+...
+# start tensorboard
+tensorboard serve --logdir e5_using_logkey/
+```
