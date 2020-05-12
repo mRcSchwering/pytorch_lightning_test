@@ -2,13 +2,13 @@
 from torch.utils.data import DataLoader
 import torch.nn.functional as F
 import torch.optim as optim
-from src.modules import Tune
+from src.modules import MetricsAndBestLossOnEpochEnd
 from src.dataloading import RandomClassData
 from src.modeling import TanhMlp
-from src.config import WORKERS
+from src.config import N_CPUS
 
 
-class MyModule(Tune):
+class MyModule(MetricsAndBestLossOnEpochEnd):
     """
     Using a module that collects all train/val targets and predictions
     and also calculates the metrics on train/val epoch end.
@@ -20,17 +20,17 @@ class MyModule(Tune):
         super(MyModule, self).__init__()
         self.hparams = hparams
         self.metrics = metrics
-        self.net = TanhMlp(10, 16, 2)
+        self.net = TanhMlp(10, hparams['hidden-size'], 2)
         self.criterion = F.cross_entropy
 
     def forward(self, x):
         return self.net(x)
 
     def train_dataloader(self):
-        return DataLoader(dataset=RandomClassData(200, 10), batch_size=self.hparams['batch-size'], num_workers=int(WORKERS))
+        return DataLoader(dataset=RandomClassData(200, 10), batch_size=self.hparams['batch-size'], num_workers=int(N_CPUS))
     
     def val_dataloader(self):
-        return DataLoader(dataset=RandomClassData(100, 10), batch_size=self.hparams['batch-size'], num_workers=int(WORKERS))
+        return DataLoader(dataset=RandomClassData(100, 10), batch_size=self.hparams['batch-size'], num_workers=int(N_CPUS))
 
     def configure_optimizers(self):
         optimizer1 = optim.Adam(self.parameters(), lr=self.hparams['start-lr'])

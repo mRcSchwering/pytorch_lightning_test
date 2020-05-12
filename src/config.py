@@ -1,28 +1,18 @@
-"""Global config: defaults < config.json < environment variable"""
+"""Global config: defaults < environment variable"""
 import os
-import json
 from multiprocessing import cpu_count
-from torch import device, cuda
-
-CONFIG_FILE = 'config.json'
-_config = None
-if os.path.isfile(CONFIG_FILE):
-    with open(CONFIG_FILE) as inf:
-        _config = json.load(inf)
 
 
-def _get(name: str, default: str) -> str:
-    if _config is not None:
-        val = _config.get(name, default)
-    val = os.environ.get(name, default)
-    return str(val)
+CUDA_VISIBLE_DEVICES = os.environ.get('CUDA_VISIBLE_DEVICES')
+CUDA_VISIBLE_DEVICES = [] if CUDA_VISIBLE_DEVICES is None else CUDA_VISIBLE_DEVICES.split(',')
+DEVICE0 = f'cuda:{CUDA_VISIBLE_DEVICES[0]}' if len(CUDA_VISIBLE_DEVICES) > 0 else 'cpu'
+N_GPUS = int(os.environ.get('N_GPUS', len(CUDA_VISIBLE_DEVICES)))
+N_CPUS = int(os.environ.get('N_CPUS', min(max(cpu_count() - 1, 1), 4)))
+IS_TEST = bool(int(os.environ.get('TEST', '1')))
 
 
-TEST = bool(int(_get('TEST', '1')))
-DEVICE = _get('DEVICE', device('cuda' if cuda.is_available() else 'cpu'))
-WORKERS = int(_get('WORKERS', min(max(cpu_count() - 1, 1), 4)))
-
-
-print(f'TEST: {TEST}')
-print(f'DEVICE: {DEVICE}')
-print(f'WORKERS: {WORKERS}')
+print(f'CUDA_VISIBLE_DEVICES: {CUDA_VISIBLE_DEVICES}')
+print(f'DEVICE0: {DEVICE0}')
+print(f'N_GPUS: {N_GPUS}')
+print(f'N_CPUS: {N_CPUS}')
+print(f'IS_TEST: {IS_TEST}')
