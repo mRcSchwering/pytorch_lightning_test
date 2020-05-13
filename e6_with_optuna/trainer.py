@@ -1,10 +1,24 @@
 """
-python e6_with_optuna/trainer.py
+Trying to use pytorch_lightning with optuna.
+
+Here, is a version where first, I do a sampling round with optuna,
+and then I validate the 3 best hparam sets on another fold of the data.
+The main issue here was that I want to control that each training trial
+should be placed on 1 GPU, e.g. for a model that would more or less fill
+1 GPU during training.
+
+I achieved that adding a multiprocessing queue which holds the ids of
+available GPUs.
+It works mostly, sometimes I get weird multiprocessing error,
+but I gave up fixing them.
+
+:Example:
+    CUDA_VISIBLE_DEVICE=13,14 python e6_with_optuna/trainer.py
 """
 import os
-import time
 import threading
 from pathlib import Path
+from typing import List
 import pytorch_lightning as pl
 from pytorch_lightning import Trainer
 from optuna import create_study
@@ -18,91 +32,87 @@ from e6_with_optuna.module import MyModule
 THIS_DIR = Path(__file__).parent.absolute()
 
 
-class Objective:
+def train_with_params(trial_config: dict, gpu_i: int = None):
+    """
+    Actual training procedure.
     
-    def __init__(self, process_idx: list):
-        self.process_idx = process_idx
+    Takes trial config, which is not exactly the same as hparams.
+    For more specific sampling I need to take an extra step and apply a function.
+    Each training should run on 1 GPU, `gpu_i`.
+    """
+    print(f'\nStarting pid:{os.getpid()} tid:{threading.get_ident()} on GPU {gpu_i}')
+    hparams = {
+        'batch-size': 16 * 2**trial_config['batch_size_exp'],
+        'hidden-size': 16 * 2**trial_config['hidden_size_exp'],
+        'start-lr': trial_config['start_lr'],
+        'fold': trial_config['fold'],
+        'max-epochs': trial_config['max_epochs']}
+
+    metrics = {'auc': BinRocAuc()}
+    module = MyModule(hparams, metrics=metrics)
+    logger = HyperparamsSummaryTensorBoardLogger(
+        save_dir=str(THIS_DIR / '__logs__'),
+        name=f'pid{os.getpid()}_tid{threading.get_ident()}')
+
+    trainer = Trainer(
+        logger=logger,
+        max_epochs=hparams['max-epochs'],
+        gpus=None if gpu_i is None else [gpu_i],
+        weights_summary=None,  # disable summary print 
+        num_sanity_val_steps=0,  # no sanity check
+        progress_bar_refresh_rate=0,  # 20 or so, only if non-parallel
+        early_stop_callback=pl.callbacks.EarlyStopping(patience=2 * 50))  # pl issue 1751
+    trainer.fit(module)
+    return module.best_val_loss
+
+
+class Objective:
+    """
+    Optuna Objective class.
+    
+    Adapter for `study.optimize`.
+    Adds the logic for aquiring a GPU within the `study.optimize` multithread loop.
+    """
+    
+    def __init__(self, gpu_queue: GpuQueue):
+        self.gpu_queue = gpu_queue
 
     def __call__(self, trial: Trial):
-        return self.train_with_params(
-            batch_size_exp=trial.suggest_int('batch_size_exp', 0, 4),
-            hidden_size_exp=trial.suggest_int('hidden_size_exp', 0, 10),
-            start_lr=trial.suggest_loguniform('start_lr', 1e-5, 1e-3),
-            fold='fold1')
-
-    def train_with_params(
-            self,
-            batch_size_exp: int,
-            hidden_size_exp: int,
-            start_lr: float,
-            fold: str,
-            max_epochs: int = 100):
-        print(f'\nTraining in pid:{os.getpid()} tid:{threading.get_ident()} starting trial...\n')
-        # TODO: optuna uses threading, process id can be the same
-        #       in contrast to the Pool, I cannot control which GPU each thread gets
-        #       so far I would have to use the custom Pool for that
-        #       started: https://optuna.readthedocs.io/en/stable/tutorial/first.html
-
-        name = f'batch_size_exp={batch_size_exp}_=hidden_size_exp{hidden_size_exp}_start_lr={start_lr}'
-
-        hparams = {
-            'batch-size': 16 * 2**batch_size_exp,
-            'hidden-size': 16 * 2**hidden_size_exp,
-            'start-lr': start_lr,
-            'fold': fold,
-            'max-epochs': max_epochs}
-        
-        metrics = {'auc': BinRocAuc()}
-        module = MyModule(hparams, metrics=metrics)
-        logger = HyperparamsSummaryTensorBoardLogger(
-            save_dir=str(THIS_DIR / '__logs__'),
-            name=name)  # name=f'pid{os.getpid()}')
-
-        trainer = Trainer(
-            logger=logger,
-            max_epochs=hparams['max-epochs'],
-            gpus=[self.process_idx] if N_GPUS > 0 else None,
-            weights_summary=None,  # disable summary print 
-            num_sanity_val_steps=0,  # no sanity check
-            progress_bar_refresh_rate=0,  # 20 or so, only if non-parallel
-            early_stop_callback=pl.callbacks.EarlyStopping(patience=2 * 50))  # seems to be 2 https://github.com/PyTorchLightning/pytorch-lightning/issues/1751
-        trainer.fit(module)
-        return module.best_val_loss
+        with self.gpu_queue.one_gpu_per_process() as gpu_i:
+            config = {
+                'batch_size_exp': trial.suggest_int('batch_size_exp', 0, 4),
+                'hidden_size_exp': trial.suggest_int('hidden_size_exp', 0, 10),
+                'start_lr': trial.suggest_loguniform('start_lr', 1e-5, 1e-3),
+                'fold': 'fold1',
+                'max_epochs': 10}
+            return train_with_params(trial_config=config, gpu_i=gpu_i)
 
 
-import random
+def process(gpu_queue: GpuQueue, config: dict):
+    """Adapter for aquiring GPU within a `multiprocess.Pool` loop."""
+    with gpu_queue.one_gpu_per_process() as gpu_i:
+        return train_with_params(trial_config=config, gpu_i=gpu_i)
 
-def hparam_sampling(gpus: GpuQueue, config: dict = None):
-    with gpus.one_gpu_per_process() as gpu_i:
-        print(f'\nPid{os.getpid()}: starting study, config is {config}, using gpu {gpu_i}\n')
-        time.sleep(random.choice([0, 1, 2, 3]))
-        #study = create_study()
-        #study.optimize(Objective(process_idx=idx), n_jobs=1, n_trials=1)
-        print(f'\nProcess {os.getpid()} finished study\n')
-    return 'a study result'
+
+def run_sampling_rounds(n: int) -> List[Trial]:
+    print(f'\nStarting {n} round TPE sampling over hparam space.\n')
+    study = create_study()
+    study.optimize(Objective(gpu_queue=GpuQueue()), n_jobs=max(1, N_GPUS), n_trials=n)
+    return sorted(study.trials, key=lambda d: d.value)
+
+
+def repeat_on_fold2(trials: List[Trial]):
+    print(f'\nRepeating best {len(trials)} trials with fold2.\n')
+    configs = []
+    for trial in trials:
+        trial.params.update({'fold': 'fold2', 'max_epochs': 10})
+        configs.append(trial.params)
+    queue = GpuQueue()
+    pool = NonDaemonPool()
+    with pool as popen:
+        return popen.starmap(process, [(queue, d) for d in configs])
 
 
 if __name__ == '__main__':
-    inputs = [f'set{i}' for i in range(10)]
-    gpus = GpuQueue()
-    
-    with NonDaemonPool() as pool:
-        studies = pool.starmap(hparam_sampling, [(gpus, d) for d in inputs])
-
-    print(f'done, studies: {studies}')
-    
-    """
-    print('\nHparam sampling finished, consolidating results\n')
-    trials = []
-    for study in studies:
-        trials.extend(study.trials)
-    best_trials = sorted(trials, key=lambda d: d.value)[:3]
-
-    print('\nRunning fold2 for 3 best trials\n')
-    for best_trial in best_trials:
-        best_trial.params['fold'] = 'fold2'
-        obj = Objective(process_idx=0)
-        obj.train_with_params(**best_trial.params)
-
-    print('\nDone\n')
-    """
+    TRIALS = run_sampling_rounds(n=10)
+    _ = repeat_on_fold2(TRIALS[:3])

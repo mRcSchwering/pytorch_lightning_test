@@ -9,8 +9,7 @@ https://stackoverflow.com/questions/6974695/python-process-pool-non-daemonic
 """
 from contextlib import contextmanager
 import multiprocessing
-
-N_GPUS = 2
+from src.config import N_GPUS
 
 
 class NoDaemonProcess(multiprocessing.Process):
@@ -27,24 +26,22 @@ class NonDaemonPool(multiprocessing.pool.Pool):
     Extend multiprocessing.pool.Pool with NonDaemonProcess.
     Cannot extend multiprocessing.Pool as it's just a wrapper.
     """
-    # TODO: not allowing setting processes because if the number is wrong, GpuQueue will hang
     Process = NoDaemonProcess
 
     def __init__(self):
-        n_processes = N_GPUS if N_GPUS > 0 else 1
-        super().__init__(processes=n_processes)
+        super().__init__(processes=max(1, N_GPUS))
 
 
 class GpuQueue:
     """
-    Queue for processes to find available GPUs.
+    Queue for processes or threads to find available GPUs.
 
     Initialize in parent process, before starting `Pool` of workers.
     Then add it as argument to each worker.
     Use `one_gpu_per_process` as context to get gpu idxs within process.
 
     :Example:
-        def process(gpus: GpuQueue, config: dict = None):
+        def process(gpu_queue: GpuQueue, config: dict):
             with gpus.one_gpu_per_process() as gpu_i:
                 print(f'Pid{os.getpid()}: config is {config}, using gpu {gpu_i}')
                 time.sleep(2)
@@ -52,32 +49,35 @@ class GpuQueue:
         
         if __name__ == '__main__':
             inputs = ['set1', 'set2', 'set3', 'set4']
-            gpus = GpuQueue()
+            gq = GpuQueue()
             
             with NonDaemonPool(processes=2) as pool:
-                studies = pool.starmap(process, [(gpus, d) for d in inputs])
+                results = pool.starmap(process, [(gq, d) for d in inputs])
 
-            print(f'done, results: {studies}')
+            print(f'done, results: {results}')
+    
+    Note: Doesn't work 100%. With pytorch_lightning a process sometimes hangs.
+    I don't know why. This also seems to happen when the queue is not used.
+    The stacktrace includes something with `waiter.acquire()`.
+    I gave up searching for the reason.
     """
-    # TODO: should also work with no GPUs/ 1 process
-    # TODO: does it work if process = 2 but GPUs = 10?
-    # maybe better to fix it (see above)
-    # how could it work with study.optimize(Objective(), n_jobs=2, n_trials=10)???
 
     def __init__(self):
         self.queue = multiprocessing.Manager().Queue()
-        self.all_idxs = set(range(N_GPUS))
-        self.queue.put(self.all_idxs)
-        self.current_idx = None
+        all_idxs = list(range(N_GPUS)) if N_GPUS > 0 else [None]
+        for idx in all_idxs:
+            self.queue.put(idx)
 
     @contextmanager
     def one_gpu_per_process(self):
-        """Get GPU index"""
-        available_idxs = self.queue.get()
-        self.current_idx = available_idxs.pop()
-        self.queue.put(available_idxs)
-        yield self.current_idx
+        """
+        Get index of currently free GPU.
         
-        available_idxs = self.queue.get()
-        available_idxs.add(self.current_idx)
-        self.queue.put(available_idxs)
+        Context manager that yields a GPU index of a GPU which is currently not being used.
+        The index is taken from a queue which other threads or processes use as well.
+        Each process takes an index from the queue of available GPU indexes
+        and puts it back after execution.
+        """
+        current_idx = self.queue.get()
+        yield current_idx
+        self.queue.put(current_idx)
