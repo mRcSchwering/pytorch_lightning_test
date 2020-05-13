@@ -2,6 +2,7 @@
 python e6_with_optuna/trainer.py
 """
 import os
+import time
 import threading
 from pathlib import Path
 import pytorch_lightning as pl
@@ -9,7 +10,7 @@ from pytorch_lightning import Trainer
 from optuna import create_study
 from optuna.trial import Trial
 from src.config import N_GPUS
-from src.multiproc import NonDaemonPool
+from src.multiproc import NonDaemonPool, GpuQueue
 from src.metrics import BinRocAuc
 from src.loggers import HyperparamsSummaryTensorBoardLogger
 from e6_with_optuna.module import MyModule
@@ -69,22 +70,28 @@ class Objective:
         return module.best_val_loss
 
 
-def hparam_sampling(idx: int):
-    print(f'\nProcess {os.getpid()} starting study...\n')
-    study = create_study()
-    study.optimize(Objective(process_idx=idx), n_trials=10)
-    print(f'\nProcess {os.getpid()} finished study\n')
-    return study
+import random
+
+def hparam_sampling(gpus: GpuQueue, config: dict = None):
+    with gpus.one_gpu_per_process() as gpu_i:
+        print(f'\nPid{os.getpid()}: starting study, config is {config}, using gpu {gpu_i}\n')
+        time.sleep(random.choice([0, 1, 2, 3]))
+        #study = create_study()
+        #study.optimize(Objective(process_idx=idx), n_jobs=1, n_trials=1)
+        print(f'\nProcess {os.getpid()} finished study\n')
+    return 'a study result'
 
 
 if __name__ == '__main__':
-    study = create_study()
-    study.optimize(Objective(process_idx=0), n_trials=10, n_jobs=2)
-
-    """
-    with NonDaemonPool() as pool:
-        studies = pool.map(hparam_sampling, range(N_GPUS) if N_GPUS > 0 else [0])
+    inputs = [f'set{i}' for i in range(10)]
+    gpus = GpuQueue()
     
+    with NonDaemonPool() as pool:
+        studies = pool.starmap(hparam_sampling, [(gpus, d) for d in inputs])
+
+    print(f'done, studies: {studies}')
+    
+    """
     print('\nHparam sampling finished, consolidating results\n')
     trials = []
     for study in studies:
