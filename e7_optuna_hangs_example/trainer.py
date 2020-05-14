@@ -106,7 +106,7 @@ def train_with_params(trial_config, trial_i, gpu_i):
 
     trainer = pl.Trainer(
         logger=logger,
-        max_epochs=hparams['max_epochs'],
+        max_epochs=hparams['max-epochs'],
         gpus=None if gpu_i is None else [gpu_i],
         weights_summary=None,
         num_sanity_val_steps=0,
