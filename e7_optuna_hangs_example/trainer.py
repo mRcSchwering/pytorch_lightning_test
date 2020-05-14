@@ -125,7 +125,14 @@ class Objective:
         return train_with_params(config, trial.number)
 
 
-if __name__ == "__main__":
+def run_sampling_rounds(n: int):
+    print(f'\nStarting {n} round TPE sampling over hparam space.\n')
     study = optuna.create_study()
-    study.optimize(Objective(), n_trials=10, n_jobs=max(1, N_GPUS))
+    study.optimize(Objective(), n_trials=n, n_jobs=max(1, N_GPUS))
+    return sorted(study.trials, key=lambda d: d.value)
+
+
+if __name__ == "__main__":
+    TRIALS = run_sampling_rounds(10)
+    print('done')
 
