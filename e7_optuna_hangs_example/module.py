@@ -1,20 +1,21 @@
 import torch
 import torch.nn.functional as F
-import pytorch_lightning as pl
 from torch.optim import Adam
 from torch.utils.data import DataLoader
 from src.config import N_CPUS
+from src.modules import MetricsAndBestLossOnEpochEnd
 from src.dataloading import RandomClassData
 from src.modeling import TanhMlp
 
 
-class MyModule(pl.LightningModule):
+class MyModule(MetricsAndBestLossOnEpochEnd):
 
-    def __init__(self, hparams: dict):
+    def __init__(self, hparams: dict, metrics: dict):
         super(MyModule, self).__init__()
         self.net = TanhMlp(10, hparams['hidden-size'], 2)
         self.best_val_loss = 999.9
         self.hparams = hparams
+        self.metrics = metrics
 
     def forward(self, x):
         return self.net(x)
@@ -33,14 +34,6 @@ class MyModule(pl.LightningModule):
 
     def validation_step(self, batch, batch_idx: int) -> dict:
         return self._forward_pass(*batch)
-
-    def validation_epoch_end(self, steps):
-        targets = torch.cat([d['targets'] for d in steps], dim=0)
-        loss = float((torch.stack([d['loss'] for d in steps]).sum() / len(targets)).cpu().numpy())
-        if loss < self.best_val_loss:
-            self.best_val_loss = loss
-        log = {'best_val_loss': self.best_val_loss}
-        return {'loss': loss, 'log': log}
 
     def _forward_pass(self, x, y) -> float:
         preds = self.forward(x)

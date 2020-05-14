@@ -36,7 +36,7 @@ def train_with_params(trial_config, trial_i, gpu_i):
         num_sanity_val_steps=0,
         progress_bar_refresh_rate=0)
 
-    model = MyModule(hparams)
+    model = MyModule(hparams, {})
     trainer.fit(model)
     print(f'Finished trial {trial_i} pid:{os.getpid()} tid:{threading.get_ident()}')
     return model.best_val_loss
