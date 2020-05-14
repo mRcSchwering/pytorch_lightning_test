@@ -3,6 +3,7 @@ import torch.nn.functional as F
 import pytorch_lightning as pl
 from torch.optim import Adam
 from torch.utils.data import DataLoader
+from src.config import N_CPUS
 from src.dataloading import RandomClassData
 from src.modeling import TanhMlp
 
@@ -19,10 +20,10 @@ class MyModule(pl.LightningModule):
         return self.net(x)
 
     def train_dataloader(self):
-        return DataLoader(dataset=RandomClassData(200, 10), batch_size=self.hparams['batch-size'], num_workers=2)
+        return DataLoader(dataset=RandomClassData(200, 10), batch_size=self.hparams['batch-size'], num_workers=N_CPUS)
     
     def val_dataloader(self):
-        return DataLoader(dataset=RandomClassData(100, 10), batch_size=self.hparams['batch-size'], num_workers=2)
+        return DataLoader(dataset=RandomClassData(100, 10), batch_size=self.hparams['batch-size'], num_workers=N_CPUS)
 
     def configure_optimizers(self):
         return Adam(self.parameters(), lr=1e-3)
