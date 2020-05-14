@@ -115,4 +115,4 @@ def repeat_on_fold2(trials: List[Trial]):
 
 if __name__ == '__main__':
     TRIALS = run_sampling_rounds(n=10)
-    _ = repeat_on_fold2(TRIALS[:3])
+    #_ = repeat_on_fold2(TRIALS[:3])
