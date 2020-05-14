@@ -13,12 +13,14 @@ from torch.utils.data import Dataset, DataLoader
 from src.loggers import HyperparamsSummaryTensorBoardLogger
 import optuna
 from src.multiproc import GpuQueue
+from e6_with_optuna.module import MyModule
 
 THIS_DIR = Path(__file__).parent.absolute()
 CUDA_VISIBLE_DEVICES = os.environ.get('CUDA_VISIBLE_DEVICES')
 N_GPUS = 0 if CUDA_VISIBLE_DEVICES is None else len(CUDA_VISIBLE_DEVICES.split(','))
 
 
+'''
 class RandomClassData(Dataset):
     """Standard normal distributed features and uniformly sampled discrete targets"""
 
@@ -87,7 +89,7 @@ class MyModule(pl.LightningModule):
         preds = self.forward(x)
         loss = F.cross_entropy(preds, y)
         return {'loss': loss, 'preds': preds, 'targets': y}
-
+'''
 
 def train_with_params(trial_config, trial_i, gpu_i):
     print(f'Starting trial {trial_i} pid:{os.getpid()} tid:{threading.get_ident()}')
@@ -110,7 +112,7 @@ def train_with_params(trial_config, trial_i, gpu_i):
         num_sanity_val_steps=0,
         progress_bar_refresh_rate=0)
 
-    model = MyModule(hparams)
+    model = MyModule(hparams, metrics={})
     trainer.fit(model)
     print(f'Finished trial {trial_i} pid:{os.getpid()} tid:{threading.get_ident()}')
     return model.best_val_loss
