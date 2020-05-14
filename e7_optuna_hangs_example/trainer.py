@@ -120,13 +120,14 @@ class Objective:
         self.gpu_queue = gpu_queue
 
     def __call__(self, trial):
-        config = {
-            'batch_size_exp': trial.suggest_int('batch_size_exp', 0, 4),
-            'hidden_size_exp': trial.suggest_int('hidden_size_exp', 0, 10),
-            'start_lr': trial.suggest_loguniform('start_lr', 1e-5, 1e-3),
-            'fold': 'fold1',
-            'max_epochs': 10}
-        return train_with_params(config, trial.number)
+        with self.gpu_queue.one_gpu_per_process() as gpu_i:
+            config = {
+                'batch_size_exp': trial.suggest_int('batch_size_exp', 0, 4),
+                'hidden_size_exp': trial.suggest_int('hidden_size_exp', 0, 10),
+                'start_lr': trial.suggest_loguniform('start_lr', 1e-5, 1e-3),
+                'fold': 'fold1',
+                'max_epochs': 10}
+            return train_with_params(config, trial.number)
 
 
 def run_sampling_rounds(n: int):
