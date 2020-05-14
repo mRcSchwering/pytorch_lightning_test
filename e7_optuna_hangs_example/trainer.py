@@ -4,7 +4,7 @@ Trying to find out why e6 is hanging on the last job.
 import os
 from pathlib import Path
 import pytorch_lightning as pl
-from multiprocessing import Process
+from multiprocessing import Process, Value
 import optuna
 from src.loggers import HyperparamsSummaryTensorBoardLogger
 from src.multiproc import GpuQueue
@@ -13,7 +13,7 @@ from e7_optuna_hangs_example.module import MyModule
 THIS_DIR = Path(__file__).parent.absolute()
 
 
-def train_with_params(hparams, trial_i, gpu_i):
+def train_with_params(hparams, trial_i, gpu_i, return_value):
     print(f'Training in pid:{os.getpid()}, ppid:{os.getppid()}')
     logger = HyperparamsSummaryTensorBoardLogger(
         save_dir=str(THIS_DIR / '__logs__'),
@@ -29,7 +29,7 @@ def train_with_params(hparams, trial_i, gpu_i):
 
     model = MyModule(hparams, {})
     trainer.fit(model)
-    return model.best_val_loss
+    return_value = model.best_val_loss
 
 
 def objective(trial, queue):
@@ -42,11 +42,12 @@ def objective(trial, queue):
         'max-epochs': 10}
     with queue.one_gpu_per_process() as gpu_i:
         print(f'In trial {trial.number}, pid:{os.getpid()} starting new process with gpu {gpu_i}')
-        p = Process(target=train_with_params, args=(hparams, trial.number, gpu_i))
+        return_value = Value('d', float('nan'))
+        p = Process(target=train_with_params, args=(hparams, trial.number, gpu_i, return_value))
         p.start()
         p.join()
     print(f'Finished trial {trial.number}')
-    return 1
+    return return_value
 
 
 def run_sampling_rounds(n: int):
