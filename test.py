@@ -1,36 +1,107 @@
-from pathlib import Path
-from torch.utils.tensorboard import SummaryWriter
-from tensorboard.backend.event_processing.event_accumulator import EventAccumulator
+import pytest
+import torch
+import numpy as np
+from utils.settings import DEVICE
+import utils.metrics as metrics
 
-# TODO: use SummaryWriter directly
-# only change the way directories are named (or not? actually doesnt matter)
-# write logger from that...
-
-#this_dir = Path(__file__).parent.absolute()
-this_dir = Path('e5_using_logkey').absolute()
-
-# TODO: write logging class with this...
-with SummaryWriter(log_dir=this_dir / 'logs') as w:
-    for i in range(5):
-        w.add_scalar('y=2x', i * 2, i)
-    w.add_hparams({'lr': 0.1*i, 'bsize': i}, {'hparam/accuracy': 10*i, 'hparam/loss': 10*i})
+regr_metrics = [metrics.Mse, metrics.Rsquared]
+class_metrics = [metrics.Accuracy, metrics.BinRocAuc]
 
 
-event_acc = EventAccumulator(str(this_dir / 'logs' / '0' / 'version_0'))
-event_acc.Reload()
-print(event_acc.Tags())
+def test_not_implemented_raises():
+    m = metrics.Metric()
+    with pytest.raises(NotImplementedError):
+        m.get()
 
 
-event_acc.scalars.Items('best/val-loss')[-1]
-event_acc.scalars.Items('best/epoch')[-1]
+@pytest.mark.parametrize('M', regr_metrics)
+def test_smoke_regr_metrics(M):
+    m = M()
+    m.reset()
+    m.add(torch.tensor([1.2, 0.3, 1.7]).to(DEVICE), torch.tensor([0.1, 1.2, 1.3]).to(DEVICE))
+    assert isinstance(m.get(), float)
 
 
+@pytest.mark.parametrize('M', class_metrics)
+def test_smoke_class_metrics(M):
+    m = M()
+    m.reset()
+    m.add(torch.tensor([1, 0, 1]).to(DEVICE), torch.tensor([[0.1, 1.2], [0.1, 0.2], [2.1, 1.2]]).to(DEVICE))
+    assert isinstance(m.get(), float)
 
 
+@pytest.mark.parametrize('M', class_metrics)
+def test_class_metrics_extreme_cases(M):
+    m = M()
+    m.reset()
+    m.add(torch.tensor([0]).to(DEVICE), torch.tensor([[0, 0]]).to(DEVICE))
+    assert isinstance(m.get(), float)
+    m.add(torch.tensor([0]).to(DEVICE), torch.tensor([[0, 0]]).to(DEVICE))
+    assert isinstance(m.get(), float)
 
 
+@pytest.mark.parametrize('M', regr_metrics)
+def test_regr_metrics_extreme_cases(M):
+    m = M()
+    m.reset()
+    m.add(torch.tensor([0]).to(DEVICE), torch.tensor([[0, 0]]).to(DEVICE))
+    assert isinstance(m.get(), float)
+    m.add(torch.tensor([0]).to(DEVICE), torch.tensor([[0, 0]]).to(DEVICE))
+    assert isinstance(m.get(), float)
 
-# E. g. get wall clock, number of steps and value for a scalar 'Accuracy'
-w_times, step_nums, vals = zip(*event_acc.Scalars('hparam/accuracy'))
 
-vals
+def test_accuracy():
+    m = metrics.Accuracy()
+    m.reset()
+    m.add(torch.tensor([1]).to(DEVICE), torch.tensor([[.0, .1]]).to(DEVICE))
+    assert m.get() == 1
+    m.add(torch.tensor([0]).to(DEVICE), torch.tensor([[.0, .1]]).to(DEVICE))
+    assert m.get() == 0.5
+    m.add(torch.tensor([0]).to(DEVICE), torch.tensor([[.1, .0]]).to(DEVICE))
+    m.add(torch.tensor([0]).to(DEVICE), torch.tensor([[.1, .0]]).to(DEVICE))
+    assert m.get() == 0.75
+
+
+def test_mse():
+    m = metrics.Mse()
+    m.reset()
+    m.add(torch.tensor([.1]).to(DEVICE), torch.tensor([.1]).to(DEVICE))
+    assert m.get() == .0
+    m.add(torch.tensor([.1]).to(DEVICE), torch.tensor([1.1]).to(DEVICE))
+    assert m.get() == 0.5
+    
+
+def test_r2():
+    m = metrics.Rsquared()
+    m.reset()
+    m.add(torch.tensor([.1]).to(DEVICE), torch.tensor([.1]).to(DEVICE))
+    assert np.isnan(m.get())
+    m.add(torch.tensor([1.1]).to(DEVICE), torch.tensor([1.1]).to(DEVICE))
+    assert m.get() == 1
+    m.add(torch.tensor([0.5]).to(DEVICE), torch.tensor([1.1]).to(DEVICE))
+    res = m.get()
+    assert res < 1
+    assert res > 0
+
+
+def test_bin_roc_auc():
+    m = metrics.BinRocAuc()
+    m.reset()
+    m.add(torch.tensor([1, 1, 1, 0, 0]).to(DEVICE),
+          torch.tensor([[.0, .9], [.0, .7], [.0, .5], [.0, .3], [.0, .1]]).to(DEVICE))
+    assert m.get() == 1
+    m.add(torch.tensor([1, 1]).to(DEVICE), torch.tensor([[.0, .1], [.0, .1]]).to(DEVICE))
+    assert m.get() == 0.7
+
+    m = metrics.BinRocAuc(decision_function='cross_entropy')
+    m.reset()
+    m.add(torch.tensor([1, 1, 1, 0, 0]).to(DEVICE),
+          torch.tensor([[.0, .9], [.0, .7], [.0, .5], [.0, .3], [.0, .1]]).to(DEVICE))
+    assert m.get() == 1
+    m.add(torch.tensor([1, 1]).to(DEVICE), torch.tensor([[.0, .1], [.0, .1]]).to(DEVICE))
+    assert m.get() == 0.7
+
+    m.reset()
+    m.add(torch.tensor([1, 1, 1, 0, 0]).to(DEVICE),
+          torch.tensor([[.0, .9], [.0, .7], [.9, .5], [.0, .3], [.0, .1]]).to(DEVICE))
+    assert m.get() < 1
