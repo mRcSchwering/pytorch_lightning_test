@@ -3,6 +3,7 @@ Trying to find out why e6 is hanging on the last job.
 """
 import os
 import threading
+from pathlib import Path
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -13,6 +14,7 @@ from src.loggers import HyperparamsSummaryTensorBoardLogger
 import optuna
 from src.multiproc import GpuQueue
 
+THIS_DIR = Path(__file__).parent.absolute()
 CUDA_VISIBLE_DEVICES = os.environ.get('CUDA_VISIBLE_DEVICES')
 N_GPUS = 0 if CUDA_VISIBLE_DEVICES is None else len(CUDA_VISIBLE_DEVICES.split(','))
 
@@ -78,7 +80,8 @@ class MyModule(pl.LightningModule):
         loss = float((torch.stack([d['loss'] for d in steps]).sum() / len(targets)).cpu().numpy())
         if loss < self.best_val_loss:
             self.best_val_loss = loss
-        return {'loss': loss}
+        log = {'best_val_loss': self.best_val_loss}
+        return {'loss': loss, 'log': log}
 
     def _forward_pass(self, x, y) -> float:
         preds = self.forward(x)
@@ -95,12 +98,12 @@ def train_with_params(trial_config, trial_i, gpu_i):
         'fold': trial_config['fold'],
         'max_epochs': trial_config['max_epochs']}
 
-    #logger = HyperparamsSummaryTensorBoardLogger(
-    #    save_dir=str(THIS_DIR / '__logs__'),
-    #    name=f'pid{os.getpid()}_tid{threading.get_ident()}')
+    logger = HyperparamsSummaryTensorBoardLogger(
+        save_dir=str(THIS_DIR / '__logs__'),
+        name=f'{trial_i}_trial')
 
     trainer = pl.Trainer(
-        logger=False,
+        logger=logger,
         max_epochs=hparams['max_epochs'],
         gpus=None if gpu_i is None else [gpu_i],
         weights_summary=None,
