@@ -49,7 +49,7 @@ class MyModule(pl.LightningModule):
 
     def __init__(self, hparams: dict):
         super(MyModule, self).__init__()
-        self.net = TanhMlp(10, hparams['hidden-size'], 2)
+        self.net = TanhMlp(10, hparams['hidden_size'], 2)
         self.best_val_loss = 999.9
         self.hparams = hparams
 
@@ -57,10 +57,10 @@ class MyModule(pl.LightningModule):
         return self.net(x)
 
     def train_dataloader(self):
-        return DataLoader(dataset=RandomClassData(200, 10), batch_size=self.hparams['batch-size'])
+        return DataLoader(dataset=RandomClassData(200, 10), batch_size=self.hparams['batch_size'])
     
     def val_dataloader(self):
-        return DataLoader(dataset=RandomClassData(100, 10), batch_size=self.hparams['batch-size'])
+        return DataLoader(dataset=RandomClassData(100, 10), batch_size=self.hparams['batch_size'])
 
     def configure_optimizers(self):
         return Adam(self.parameters(), lr=1e-3)
@@ -88,7 +88,7 @@ def train_with_params(hparams, trial_i):
     print(f'Starting trial {trial_i} pid:{os.getpid()} tid:{threading.get_ident()}')
     trainer = pl.Trainer(
         logger=False,
-        max_epochs=hparams['max-epochs'],
+        max_epochs=hparams['max_epochs'],
         gpus=0 if N_GPUS > 0 else None,
         weights_summary=None,
         num_sanity_val_steps=0,
