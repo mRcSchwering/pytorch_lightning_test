@@ -42,7 +42,7 @@ def objective(trial, queue):
         'max-epochs': 10}
     with queue.one_gpu_per_process() as gpu_i:
         print(f'In trial {trial.number}, pid:{os.getpid()} starting new process with gpu {gpu_i}')
-        return_value = Value('d', float('nan'))
+        return_value = Value('d', 0.0)  # cant cast nan
         p = Process(target=train_with_params, args=(hparams, trial.number, gpu_i, return_value))
         p.start()
         p.join()
