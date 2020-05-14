@@ -50,12 +50,12 @@ def train_with_params(trial_config: dict, gpu_i: int = None):
 
     metrics = {'auc': BinRocAuc()}
     module = MyModule(hparams, metrics=metrics)
-    logger = HyperparamsSummaryTensorBoardLogger(
-        save_dir=str(THIS_DIR / '__logs__'),
-        name=f'pid{os.getpid()}_tid{threading.get_ident()}')
+    #logger = HyperparamsSummaryTensorBoardLogger(
+    #    save_dir=str(THIS_DIR / '__logs__'),
+    #    name=f'pid{os.getpid()}_tid{threading.get_ident()}')
 
     trainer = Trainer(
-        logger=logger,
+        logger=False,
         max_epochs=hparams['max-epochs'],
         gpus=None if gpu_i is None else [gpu_i],
         weights_summary=None,  # disable summary print 

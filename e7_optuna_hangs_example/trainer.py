@@ -9,6 +9,7 @@ import torch.nn.functional as F
 import pytorch_lightning as pl
 from torch.optim import Adam
 from torch.utils.data import Dataset, DataLoader
+from src.loggers import HyperparamsSummaryTensorBoardLogger
 import optuna
 from src.multiproc import GpuQueue
 
@@ -93,6 +94,10 @@ def train_with_params(trial_config, trial_i, gpu_i):
         'start_lr': trial_config['start_lr'],
         'fold': trial_config['fold'],
         'max_epochs': trial_config['max_epochs']}
+
+    #logger = HyperparamsSummaryTensorBoardLogger(
+    #    save_dir=str(THIS_DIR / '__logs__'),
+    #    name=f'pid{os.getpid()}_tid{threading.get_ident()}')
 
     trainer = pl.Trainer(
         logger=False,
