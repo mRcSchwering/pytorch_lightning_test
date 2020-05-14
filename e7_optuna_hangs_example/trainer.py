@@ -10,6 +10,7 @@ import pytorch_lightning as pl
 from torch.optim import Adam
 from torch.utils.data import Dataset, DataLoader
 import optuna
+from src.multiproc import GpuQueue
 
 CUDA_VISIBLE_DEVICES = os.environ.get('CUDA_VISIBLE_DEVICES')
 N_GPUS = 0 if CUDA_VISIBLE_DEVICES is None else len(CUDA_VISIBLE_DEVICES.split(','))
@@ -114,6 +115,9 @@ class Objective:
     Adapter for `study.optimize`.
     Adds the logic for aquiring a GPU within the `study.optimize` multithread loop.
     """
+
+    def __init__(self, gpu_queue: GpuQueue):
+        self.gpu_queue = gpu_queue
 
     def __call__(self, trial):
         config = {
