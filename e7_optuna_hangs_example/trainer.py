@@ -13,7 +13,7 @@ from e7_optuna_hangs_example.module import MyModule
 THIS_DIR = Path(__file__).parent.absolute()
 
 
-def train_with_params(hparams, trial_i):
+def train_with_params(hparams, trial_i, gpu_i):
     print(f'Training in pid:{os.getpid()}, ppid:{os.getppid()}')
     logger = HyperparamsSummaryTensorBoardLogger(
         save_dir=str(THIS_DIR / '__logs__'),
@@ -22,7 +22,7 @@ def train_with_params(hparams, trial_i):
     trainer = pl.Trainer(
         logger=logger,
         max_epochs=hparams['max-epochs'],
-        gpus=None,
+        gpus=gpu_i,
         weights_summary=None,
         num_sanity_val_steps=0,
         progress_bar_refresh_rate=0)
@@ -42,7 +42,7 @@ def objective(trial, queue):
         'max-epochs': 10}
     with queue.one_gpu_per_process() as gpu_i:
         print(f'In trial {trial.number}, pid:{os.getpid()} starting new process with gpu {gpu_i}')
-        p = Process(target=train_with_params, args=(hparams, trial.number))
+        p = Process(target=train_with_params, args=(hparams, trial.number, gpu_i))
         p.start()
         p.join()
     print(f'Finished trial {trial.number}')
