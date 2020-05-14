@@ -11,7 +11,7 @@ from torch.optim import Adam
 from torch.utils.data import Dataset, DataLoader
 import optuna
 
-N_GPUS = os.environ.get('CUDA_VISIBLE_DEVICES', 0)
+N_GPUS = int(os.environ.get('CUDA_VISIBLE_DEVICES', 0))
 
 
 class RandomClassData(Dataset):
