@@ -85,7 +85,7 @@ class MyModule(pl.LightningModule):
         return {'loss': loss, 'preds': preds, 'targets': y}
 
 
-def train_with_params(trial_config, trial_i):
+def train_with_params(trial_config, trial_i, gpu_i):
     print(f'Starting trial {trial_i} pid:{os.getpid()} tid:{threading.get_ident()}')
     hparams = {
         'batch_size': 16 * 2**trial_config['batch_size_exp'],
@@ -97,7 +97,7 @@ def train_with_params(trial_config, trial_i):
     trainer = pl.Trainer(
         logger=False,
         max_epochs=hparams['max_epochs'],
-        gpus=0 if N_GPUS > 0 else None,
+        gpus=None if gpu_i is None else [gpu_i],
         weights_summary=None,
         num_sanity_val_steps=0,
         progress_bar_refresh_rate=0)
@@ -127,7 +127,7 @@ class Objective:
                 'start_lr': trial.suggest_loguniform('start_lr', 1e-5, 1e-3),
                 'fold': 'fold1',
                 'max_epochs': 10}
-            return train_with_params(config, trial.number)
+            return train_with_params(config, trial.number, gpu_i)
 
 
 def run_sampling_rounds(n: int):
