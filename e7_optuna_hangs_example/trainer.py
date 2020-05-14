@@ -83,7 +83,7 @@ class MyModule(pl.LightningModule):
         return {'loss': loss, 'preds': preds, 'targets': y}
 
 
-def objective(trial):
+def train_with_params(trial):
     print(f'Starting trial {trial.number} pid:{os.getpid()} tid:{threading.get_ident()}')
     trainer = pl.Trainer(
         logger=False,
@@ -99,7 +99,26 @@ def objective(trial):
     return model.best_val_loss
 
 
+class Objective:
+    """
+    Optuna Objective class.
+    
+    Adapter for `study.optimize`.
+    Adds the logic for aquiring a GPU within the `study.optimize` multithread loop.
+    """
+
+    def __call__(self, trial):
+        config = {
+            'batch_size_exp': trial.suggest_int('batch_size_exp', 0, 4),
+            'hidden_size_exp': trial.suggest_int('hidden_size_exp', 0, 10),
+            'start_lr': trial.suggest_loguniform('start_lr', 1e-5, 1e-3),
+            'fold': 'fold1',
+            'max_epochs': 10}
+        return train_with_params(trial)
+
+
+
 if __name__ == "__main__":
     study = optuna.create_study()
-    study.optimize(objective, n_trials=10, n_jobs=max(1, N_GPUS))
+    study.optimize(Objective(), n_trials=10, n_jobs=max(1, N_GPUS))
 
