@@ -94,11 +94,11 @@ class MyModule(pl.LightningModule):
 def train_with_params(trial_config, trial_i, gpu_i):
     print(f'Starting trial {trial_i} pid:{os.getpid()} tid:{threading.get_ident()}')
     hparams = {
-        'batch_size': 16 * 2**trial_config['batch_size_exp'],
-        'hidden_size': 16 * 2**trial_config['hidden_size_exp'],
-        'start_lr': trial_config['start_lr'],
+        'batch-size': 16 * 2**trial_config['batch_size_exp'],
+        'hidden-size': 16 * 2**trial_config['hidden_size_exp'],
+        'start-lr': trial_config['start_lr'],
         'fold': trial_config['fold'],
-        'max_epochs': trial_config['max_epochs']}
+        'max-epochs': trial_config['max_epochs']}
 
     logger = HyperparamsSummaryTensorBoardLogger(
         save_dir=str(THIS_DIR / '__logs__'),
