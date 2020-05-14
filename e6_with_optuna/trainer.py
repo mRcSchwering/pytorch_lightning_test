@@ -32,7 +32,7 @@ from e6_with_optuna.module import MyModule
 THIS_DIR = Path(__file__).parent.absolute()
 
 
-def train_with_params(trial_config: dict, gpu_i: int = None):
+def train_with_params(trial_config: dict, gpu_i: int, trial_i: int):
     """
     Actual training procedure.
     
@@ -40,7 +40,6 @@ def train_with_params(trial_config: dict, gpu_i: int = None):
     For more specific sampling I need to take an extra step and apply a function.
     Each training should run on 1 GPU, `gpu_i`.
     """
-    print(f'\nStarting pid:{os.getpid()} tid:{threading.get_ident()} on GPU {gpu_i}')
     hparams = {
         'batch-size': 16 * 2**trial_config['batch_size_exp'],
         'hidden-size': 16 * 2**trial_config['hidden_size_exp'],
@@ -50,12 +49,12 @@ def train_with_params(trial_config: dict, gpu_i: int = None):
 
     metrics = {'auc': BinRocAuc()}
     module = MyModule(hparams, metrics=metrics)
-    #logger = HyperparamsSummaryTensorBoardLogger(
-    #    save_dir=str(THIS_DIR / '__logs__'),
-    #    name=f'pid{os.getpid()}_tid{threading.get_ident()}')
+    logger = HyperparamsSummaryTensorBoardLogger(
+        save_dir=str(THIS_DIR / '__logs__'),
+        name=f'sampling_trial{trial_i}')
 
     trainer = Trainer(
-        logger=False,
+        logger=logger,
         max_epochs=hparams['max-epochs'],
         gpus=None if gpu_i is None else [gpu_i],
         weights_summary=None,  # disable summary print 
@@ -85,7 +84,7 @@ class Objective:
                 'start_lr': trial.suggest_loguniform('start_lr', 1e-5, 1e-3),
                 'fold': 'fold1',
                 'max_epochs': 10}
-            return train_with_params(trial_config=config, gpu_i=gpu_i)
+            return train_with_params(trial_config=config, gpu_i=gpu_i, trial_i=trial.number)
 
 
 def process(gpu_queue: GpuQueue, config: dict):
