@@ -84,8 +84,15 @@ class MyModule(pl.LightningModule):
         return {'loss': loss, 'preds': preds, 'targets': y}
 
 
-def train_with_params(hparams, trial_i):
+def train_with_params(trial_config, trial_i):
     print(f'Starting trial {trial_i} pid:{os.getpid()} tid:{threading.get_ident()}')
+    hparams = {
+        'batch_size': 16 * 2**trial_config['batch_size_exp'],
+        'hidden_size': 16 * 2**trial_config['hidden_size_exp'],
+        'start_lr': trial_config['start_lr'],
+        'fold': trial_config['fold'],
+        'max_epochs': trial_config['max_epochs']}
+
     trainer = pl.Trainer(
         logger=False,
         max_epochs=hparams['max_epochs'],
@@ -109,13 +116,13 @@ class Objective:
     """
 
     def __call__(self, trial):
-        hparams = {
+        config = {
             'batch_size_exp': trial.suggest_int('batch_size_exp', 0, 4),
             'hidden_size_exp': trial.suggest_int('hidden_size_exp', 0, 10),
             'start_lr': trial.suggest_loguniform('start_lr', 1e-5, 1e-3),
             'fold': 'fold1',
             'max_epochs': 10}
-        return train_with_params(hparams, trial.number)
+        return train_with_params(config, trial.number)
 
 
 if __name__ == "__main__":
