@@ -47,19 +47,20 @@ class TanhMlp(nn.Module):
 
 class MyModule(pl.LightningModule):
 
-    def __init__(self):
+    def __init__(self, hparams: dict):
         super(MyModule, self).__init__()
-        self.net = TanhMlp(10, 128, 2)
+        self.net = TanhMlp(10, hparams['hidden-size'], 2)
         self.best_val_loss = 999.9
+        self.hparams = hparams
 
     def forward(self, x):
         return self.net(x)
 
     def train_dataloader(self):
-        return DataLoader(dataset=RandomClassData(200, 10), batch_size=32)
+        return DataLoader(dataset=RandomClassData(200, 10), batch_size=self.hparams['batch-size'])
     
     def val_dataloader(self):
-        return DataLoader(dataset=RandomClassData(100, 10), batch_size=32)
+        return DataLoader(dataset=RandomClassData(100, 10), batch_size=self.hparams['batch-size'])
 
     def configure_optimizers(self):
         return Adam(self.parameters(), lr=1e-3)
@@ -83,19 +84,19 @@ class MyModule(pl.LightningModule):
         return {'loss': loss, 'preds': preds, 'targets': y}
 
 
-def train_with_params(trial):
-    print(f'Starting trial {trial.number} pid:{os.getpid()} tid:{threading.get_ident()}')
+def train_with_params(hparams, trial_i):
+    print(f'Starting trial {trial_i} pid:{os.getpid()} tid:{threading.get_ident()}')
     trainer = pl.Trainer(
         logger=False,
-        max_epochs=10,
+        max_epochs=hparams['max-epochs'],
         gpus=0 if N_GPUS > 0 else None,
         weights_summary=None,
         num_sanity_val_steps=0,
         progress_bar_refresh_rate=0)
 
-    model = MyModule()
+    model = MyModule(hparams)
     trainer.fit(model)
-    print(f'Finished trial {trial.number} pid:{os.getpid()} tid:{threading.get_ident()}')
+    print(f'Finished trial {trial_i} pid:{os.getpid()} tid:{threading.get_ident()}')
     return model.best_val_loss
 
 
@@ -108,14 +109,13 @@ class Objective:
     """
 
     def __call__(self, trial):
-        config = {
+        hparams = {
             'batch_size_exp': trial.suggest_int('batch_size_exp', 0, 4),
             'hidden_size_exp': trial.suggest_int('hidden_size_exp', 0, 10),
             'start_lr': trial.suggest_loguniform('start_lr', 1e-5, 1e-3),
             'fold': 'fold1',
             'max_epochs': 10}
-        return train_with_params(trial)
-
+        return train_with_params(hparams, trial.number)
 
 
 if __name__ == "__main__":
