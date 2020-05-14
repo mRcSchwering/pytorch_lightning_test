@@ -62,9 +62,11 @@ class GpuQueue:
     I gave up searching for the reason.
     """
 
-    def __init__(self):
+    def __init__(self, n: int = None):
+        if n is None:
+            n = N_GPUS
         self.queue = multiprocessing.Manager().Queue()
-        all_idxs = list(range(N_GPUS)) if N_GPUS > 0 else [None]
+        all_idxs = list(range(n)) if n > 0 else [None]
         for idx in all_idxs:
             self.queue.put(idx)
 

@@ -5,8 +5,9 @@ import os
 from pathlib import Path
 import pytorch_lightning as pl
 from multiprocessing import Process
-from src.loggers import HyperparamsSummaryTensorBoardLogger
 import optuna
+from src.loggers import HyperparamsSummaryTensorBoardLogger
+from src.multiproc import GpuQueue
 from e7_optuna_hangs_example.module import MyModule
 
 THIS_DIR = Path(__file__).parent.absolute()
@@ -31,7 +32,7 @@ def train_with_params(hparams, trial_i):
     return model.best_val_loss
 
 
-def objective(trial):
+def objective(trial, queue):
     print(f'Starting trial {trial.number} in pid:{os.getpid()}')
     hparams = {
         'batch-size': 16 * 2**trial.suggest_int('batch_size_exp', 0, 4),
@@ -39,17 +40,20 @@ def objective(trial):
         'start-lr': trial.suggest_loguniform('start_lr', 1e-5, 1e-3),
         'fold': 'fold1',
         'max-epochs': 10}
-    p = Process(target=train_with_params, args=(hparams, trial.number))
-    p.start()
-    p.join()
+    with queue.one_gpu_per_process() as gpu_i:
+        print(f'In trial {trial.number}, pid:{os.getpid()} starting new process with gpu {gpu_i}')
+        p = Process(target=train_with_params, args=(hparams, trial.number))
+        p.start()
+        p.join()
     print(f'Finished trial {trial.number}')
     return 1
 
 
 def run_sampling_rounds(n: int):
     print(f'\nStarting {n} round TPE sampling over hparam space.\n')
+    queue = GpuQueue(2)
     study = optuna.create_study()
-    study.optimize(objective, n_trials=n, n_jobs=2)
+    study.optimize(lambda d: objective(d, queue), n_trials=n, n_jobs=2)
     return sorted(study.trials, key=lambda d: d.value)
 
 

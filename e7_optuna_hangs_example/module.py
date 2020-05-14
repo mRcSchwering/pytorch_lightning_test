@@ -19,10 +19,10 @@ class MyModule(MetricsAndBestLossOnEpochEnd):
         return self.net(x)
 
     def train_dataloader(self):
-        return DataLoader(dataset=RandomClassData(200, 10), batch_size=self.hparams['batch-size'], num_workers=2)
+        return DataLoader(dataset=RandomClassData(200, 10), batch_size=self.hparams['batch-size'], num_workers=4)
     
     def val_dataloader(self):
-        return DataLoader(dataset=RandomClassData(100, 10), batch_size=self.hparams['batch-size'], num_workers=2)
+        return DataLoader(dataset=RandomClassData(100, 10), batch_size=self.hparams['batch-size'], num_workers=4)
 
     def configure_optimizers(self):
         return Adam(self.parameters(), lr=1e-3)
