@@ -7,6 +7,11 @@ from src.dataloading import RandomClassData
 from src.modeling import TanhMlp
 from src.config import N_CPUS
 
+"""
+num_workers=0 => kein problem mit parallel (in study.optimize)
+
+"""
+
 
 class MyModule(MetricsAndBestLossOnEpochEnd):
     """
