@@ -1,42 +1,14 @@
-"""
-Using the convenience of multiprocessing.Pool with pytorch.
-
-Originally, I wanted to start several parallel pytorch training runs from one python process.
-I can do that with os.fork() but multprocessing.Pool is much more convenient.
-However, the processes from that are daemonized and cannot themself have children.
-Fortunately, I found this solution:
-https://stackoverflow.com/questions/6974695/python-process-pool-non-daemonic
-"""
-import os
+"""Tools for parallelizing trainings"""
 from contextlib import contextmanager
 import multiprocessing
-from multiprocessing import Value, Process, Manager
+from multiprocessing import Process, Manager
 from src.config import N_GPUS
-
-
-class NoDaemonProcess(multiprocessing.Process):
-    """A Process that has 'daemon' attribute always return False"""
-    def _get_daemon(self):
-        return False
-    def _set_daemon(self, value):
-        pass
-    daemon = property(_get_daemon, _set_daemon)
-
-
-class NonDaemonPool(multiprocessing.pool.Pool):
-    """
-    Extend multiprocessing.pool.Pool with NonDaemonProcess.
-    Cannot extend multiprocessing.Pool as it's just a wrapper.
-    """
-    Process = NoDaemonProcess
-
-    def __init__(self):
-        super().__init__(processes=max(1, N_GPUS))
 
 
 def subprocess(target: callable, kwargs: dict) -> dict:
     """
-    Run target function in another process. It must return a dict.
+    Run target function in another process.
+    Target must accept `**kwargs` and return a dict.
 
 .   This can help making the execution of `target` save.
     E.g. when using optuna's `study.optimize(..., n_jobs=2)` with
@@ -55,6 +27,33 @@ def subprocess(target: callable, kwargs: dict) -> dict:
         proc.join()
         res.update(return_dict)
     return res
+
+
+class NoDaemonProcess(multiprocessing.Process):
+    """A Process that has 'daemon' attribute always return False"""
+    def _get_daemon(self):
+        return False
+    def _set_daemon(self, value):
+        pass
+    daemon = property(_get_daemon, _set_daemon)
+
+
+class NonDaemonPool(multiprocessing.pool.Pool):
+    """
+    Extends multiprocessing.pool.Pool with NonDaemonProcess.
+    You need this to start a pytorch `DataLoader(..., num_workers=4)` in the pool.
+
+    Note: Sometimes I haved experiences weird behaviour with this.
+    E.g. the last execution never finishes. Maybe the parent doesnt recieve
+    the signal that all children are done. Anyway, it might help to use
+    `subprocess` (see above) in that case.
+
+    Idea from: https://stackoverflow.com/questions/6974695/python-process-pool-non-daemonic
+    """
+    Process = NoDaemonProcess
+
+    def __init__(self, processes: int):
+        super().__init__(processes=processes)
 
 
 class GpuQueue:
