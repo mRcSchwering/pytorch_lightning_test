@@ -1,6 +1,7 @@
 import torch.nn.functional as F
 from torch.optim import Adam
 from torch.utils.data import DataLoader
+from src.config import N_CPUS
 from src.modules import MetricsAndBestLossOnEpochEnd
 from src.dataloading import RandomClassData
 from src.modeling import TanhMlp
@@ -19,10 +20,10 @@ class MyModule(MetricsAndBestLossOnEpochEnd):
         return self.net(x)
 
     def train_dataloader(self):
-        return DataLoader(dataset=RandomClassData(200, 10), batch_size=self.hparams['batch-size'], num_workers=4)
+        return DataLoader(dataset=RandomClassData(200, 10), batch_size=self.hparams['batch-size'], num_workers=N_CPUS)
     
     def val_dataloader(self):
-        return DataLoader(dataset=RandomClassData(100, 10), batch_size=self.hparams['batch-size'], num_workers=4)
+        return DataLoader(dataset=RandomClassData(100, 10), batch_size=self.hparams['batch-size'], num_workers=N_CPUS)
 
     def configure_optimizers(self):
         return Adam(self.parameters(), lr=1e-3)
