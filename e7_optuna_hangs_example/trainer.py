@@ -1,5 +1,8 @@
 """
-Trying to find out why e6 is hanging on the last job.
+Debugging concurrency issues in e6.
+
+Example:
+    CUDA_VISIBLE_DEVICES=11,12 python e7_optuna_hangs_example.trainer.py
 """
 import os
 from pathlib import Path
