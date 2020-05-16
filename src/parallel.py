@@ -121,3 +121,19 @@ class GpuQueue:
             for idx in gpus:
                 self.queue.put(idx)
 
+
+def subprocess_with_gpus(
+        target: callable, queue: GpuQueue,
+        kwargs: dict = {}, n_gpus_per_trial: int = 1):
+    """
+    Convenience function that wraps `target` function in `subprocess` and GPU context.
+
+    `target` must accept arguments in `kwargs` and `gpus` as argument.
+    `gpus` will have the list of GPU ids (or `None` if no GPU is available).
+    Must return a dictionary with float `loss`.
+    """
+    kwargs = kwargs.copy()
+    with queue.n_gpus(n=n_gpus_per_trial) as gpus:
+        kwargs.update({'gpus': gpus})
+        res = subprocess(target=target, kwargs=kwargs)
+    return res['loss']

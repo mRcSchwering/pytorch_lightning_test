@@ -1,5 +1,6 @@
 """Base PytorchLightningModules for extending"""
 from __future__ import annotations
+import time
 from typing import List, Dict
 import torch
 import pytorch_lightning as pl
@@ -120,15 +121,16 @@ class MetricsAndBestLossOnEpochEnd(pl.LightningModule):
 
         def training_step(self, batch, batch_idx: int) -> dict:
             loss, preds = self._forward_pass(*batch)
-            return {'loss': loss, 'preds': preds, 'targets': batch[1]}
+            return {'loss': loss, 'predictions': preds, 'targets': batch[1]}
     """
 
     def __init__(self):
         super(MetricsAndBestLossOnEpochEnd, self).__init__()
         self.best_val_loss = 999.9
+        self.prev_epoch_times = {'val': None, 'train': None}
 
     def on_train_start(self):
-        self.logger.log_hyperparams_metrics(self.hparams, {'best/val-loss': self.best_val_loss})
+        self.logger.log_hyperparams_metrics(self.hparams, {'best_val_loss': self.best_val_loss})
 
     def validation_epoch_end(self, val_steps: List[dict]) -> dict:
         return self._get_epoch_results(val_steps, 'val')
@@ -138,14 +140,16 @@ class MetricsAndBestLossOnEpochEnd(pl.LightningModule):
 
     def _get_epoch_results(self, steps: List[dict], partition: str) -> dict:
         targets = torch.cat([d['targets'] for d in steps], dim=0)
-        predictions = torch.cat([d['preds'] for d in steps], dim=0)
+        predictions = torch.cat([d['predictions'] for d in steps], dim=0)
         loss = float((torch.stack([d['loss'] for d in steps]).sum() / len(targets)).cpu().numpy())
 
-        log = {f'loss/{partition}': loss}
+        log = {
+            f'metrics/{partition}_loss': loss,
+            f'stats/{partition}_epoch_s': self._update_epoch_time(partition)}
         if partition == 'val':
-            log['best/val-loss'] = self._update_best_loss(loss)
+            log['metrics/best_val_loss'] = self._update_best_loss(loss)
         for name, metric in self.metrics.items():
-            log[f'{name}/{partition}'] = metric(targets, predictions)
+            log[f'metrics/{partition}_{name}'] = metric(targets, predictions)
 
         return {f'{partition}_loss': loss, 'log': log}
 
@@ -153,6 +157,13 @@ class MetricsAndBestLossOnEpochEnd(pl.LightningModule):
         if loss < self.best_val_loss:
             self.best_val_loss = loss
         return self.best_val_loss
+
+    def _update_epoch_time(self, partition: str):
+        now = time.time()
+        if self.prev_epoch_times[partition] is None:
+            self.prev_epoch_times[partition] = now
+        self.prev_epoch_times[partition] = now - self.prev_epoch_times[partition]
+        return self.prev_epoch_times[partition]
 
 
 class EpochSummary:
